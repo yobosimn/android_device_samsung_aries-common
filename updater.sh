@@ -5,8 +5,6 @@
 # Combined GSM & CDMA version
 #
 
-SYSTEM_SIZE='629145600' # 600M
-
 check_mount() {
     local MOUNT_POINT=`/tmp/busybox readlink $1`
     if ! /tmp/busybox test -n "$MOUNT_POINT" ; then
@@ -154,7 +152,18 @@ elif /tmp/busybox test `/tmp/busybox cat /sys/class/mtd/mtd2/size` != "$MTD_SIZE
     # everything is logged into /sdcard/cyanogenmod_mtd_old.log
     set_log /sdcard/cyanogenmod_mtd_old.log
 
-    warn_repartition
+    if ! /tmp/busybox test -e /.accept_wipe ; then
+        /tmp/busybox touch /.accept_wipe
+        ui_print
+        ui_print "============================================"
+        ui_print "This ROM uses an incompatible partition layout"
+        ui_print "Your /data will be wiped upon installation"
+        ui_print "Run this update.zip again to confirm install"
+        ui_print "============================================"
+        ui_print
+        exit 9
+    fi
+    /tmp/busybox rm /.accept_wipe
 
     # write the package path to sdcard cyanogenmod.cfg
     if /tmp/busybox test -n "$UPDATE_PACKAGE" ; then
@@ -189,18 +198,6 @@ elif /tmp/busybox test -e /dev/block/mtdblock0 ; then
 
     # everything is logged into /sdcard/cyanogenmod.log
     set_log /sdcard/cyanogenmod_mtd.log
-
-    # unmount system and data (recovery seems to expect system to be unmounted)
-    /tmp/busybox umount -l /system
-    /tmp/busybox umount -l /data
-
-    # Resize partitions
-    # (For first install, this will get skipped because device doesn't exist)
-    if /tmp/busybox test `/tmp/busybox blockdev --getsize64 /dev/mapper/lvpool-system` -lt $SYSTEM_SIZE ; then
-        warn_repartition
-        /lvm/sbin/lvm lvremove -f lvpool
-        format_partitions
-    fi
 
     if $IS_GSM ; then
         # create mountpoint for radio partition
@@ -242,6 +239,9 @@ elif /tmp/busybox test -e /dev/block/mtdblock0 ; then
             /tmp/bml_over_mtd.sh recovery 102 reservoir 2004 /tmp/recovery_kernel
         fi
 
+	# unmount system (recovery seems to expect system to be unmounted)
+	/tmp/busybox umount -l /system
+
         exit 0
     fi
 
@@ -251,10 +251,22 @@ elif /tmp/busybox test -e /dev/block/mtdblock0 ; then
     # remove the cyanogenmod.cfg to prevent this from looping
     /tmp/busybox rm -f /sdcard/cyanogenmod.cfg
 
+    # unmount system and data (recovery seems to expect system to be unmounted)
+    /tmp/busybox umount -l /system
+    /tmp/busybox umount -l /data
+
     # setup lvm volumes
     /lvm/sbin/lvm pvcreate $MMC_PART
     /lvm/sbin/lvm vgcreate lvpool $MMC_PART
-    format_partitions
+    /lvm/sbin/lvm lvcreate -L 400M -n system lvpool
+    /lvm/sbin/lvm lvcreate -l 100%FREE -n userdata lvpool
+
+    # format data (/system will be formatted by updater-script)
+    /tmp/make_ext4fs -b 4096 -g 32768 -i 8192 -I 256 -l -16384 -a /data /dev/lvpool/userdata
+
+    # unmount and format datadata
+    /tmp/busybox umount -l /datadata
+    /tmp/erase_image datadata
 
     # restart into recovery so the user can install further packages before booting
     /tmp/busybox touch /cache/.startrecovery
