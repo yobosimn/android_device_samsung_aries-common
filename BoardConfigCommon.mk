@@ -45,8 +45,7 @@ BOARD_MOBILEDATA_INTERFACE_NAME = "pdp0"
 TARGET_KERNEL_SOURCE := kernel/samsung/aries
 
 # Releasetools
-TARGET_RELEASETOOL_OTA_FROM_TARGET_SCRIPT := ./device/samsung/aries-common/releasetools/aries_ota_from_target_files
-TARGET_RELEASETOOL_IMG_FROM_TARGET_SCRIPT := ./device/samsung/aries-common/releasetools/aries_img_from_target_files
+TARGET_RELEASETOOLS_EXTENSIONS := device/samsung/aries-common
 
 # Camera
 USE_CAMERA_STUB := false
